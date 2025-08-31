@@ -186,6 +186,14 @@ else()
 endif()
 endif()
 
+if(ANDROID)
+    add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_SOURCE_DIR}/libraries/${ANDROID_ABI}/libspirv-cross-c-shared.so
+            $<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>
+    )
+endif()
+
 target_include_directories(ng_gl4es PUBLIC
         ${CMAKE_SOURCE_DIR}/include
         )
