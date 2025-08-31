@@ -20,7 +20,7 @@ jobs:
       uses: android-actions/setup-android@v2
 
     - name: Install UPX
-      run: sudo apt-get install -y upx-ucl
+      run: sudo apt-get install -y upx
 
     - name: Build for ${{ matrix.abi }}
       run: |
@@ -33,6 +33,13 @@ jobs:
           ..
         make -j$(nproc)
 
+    - name: Compress with UPX
+      run: |
+        cd build-${{ matrix.abi }}
+        upx --best --android-shlib *.so
+        echo "Compressed libraries for ${{ matrix.abi }}:"
+        ls -la *.so
+        
     - name: Upload compressed libraries
       uses: actions/upload-artifact@v4
       with:
