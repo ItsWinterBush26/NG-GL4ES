@@ -19,7 +19,6 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Oz -flto -fPIC -DNO_GBM -DDEFAULT_ES=3 -fvi
 if(ANDROID)
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Oz -flto -DNOX11 -s")
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Oz -flto -static-libstdc++ -s")
-        set(CMAKE_ANDROID_STL_TYPE c++_shared)
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR}/include )
@@ -184,6 +183,7 @@ else()
         ${CMAKE_SOURCE_DIR}/library/linux/x86_64/libSPIRV.a
         ${CMAKE_SOURCE_DIR}/library/linux/x86_64/libSPVRemapper.a
     )
+endif()
 endif()
 
 target_include_directories(ng_gl4es PUBLIC
