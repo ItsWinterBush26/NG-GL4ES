@@ -1,0 +1,218 @@
+name: Android Native Library Build with UPX
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  NDK_VERSION: r25c
+  ANDROID_NDK: ${{ github.workspace }}/android-ndk-$NDK_VERSION
+  UPX_VERSION: 4.2.2
+
+jobs:
+  build-android-libs:
+    name: Build and compress Android libraries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64, x86]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '11'
+
+    - name: Download Android NDK
+      run: |
+        cd ${{ github.workspace }}
+        wget https://dl.google.com/android/repository/android-ndk-${{ env.NDK_VERSION }}-linux.zip
+        unzip -q android-ndk-${{ env.NDK_VERSION }}-linux.zip
+        echo "NDK_PATH=${{ env.ANDROID_NDK }}" >> $GITHUB_ENV
+
+    - name: Set up CMake
+      uses: jwlawson/actions-setup-cmake@v1
+      with:
+        cmake-version: '3.22.x'
+
+    - name: Install UPX
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y upx-ucl
+        # Alternative: Download latest UPX
+        # wget https://github.com/upx/upx/releases/download/v${{ env.UPX_VERSION }}/upx-${{ env.UPX_VERSION }}-amd64_linux.tar.xz
+        # tar -xf upx-${{ env.UPX_VERSION }}-amd64_linux.tar.xz
+        # echo "${{ github.workspace }}/upx-${{ env.UPX_VERSION }}-amd64_linux" >> $GITHUB_PATH
+
+    - name: Create build directory
+      run: mkdir -p build
+
+    - name: Configure and Build for ${{ matrix.abi }}
+      run: |
+        cd build
+        cmake \
+          -DCMAKE_TOOLCHAIN_FILE=$NDK_PATH/build/cmake/android.toolchain.cmake \
+          -DANDROID_ABI=${{ matrix.abi }} \
+          -DANDROID_PLATFORM=android-21 \
+          -DANDROID_NDK=$NDK_PATH \
+          -DANDROID_STL=c++_shared \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_FLAGS="-Os -ffunction-sections -fdata-sections" \
+          -DCMAKE_EXE_LINKER_FLAGS="-Wl,--gc-sections" \
+          ..
+        make -j$(nproc)
+
+    - name: Strip debug symbols (reduce size)
+      run: |
+        cd build
+        find . -name "*.so" -exec $NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-debug {} \;
+
+    - name: Compress with UPX (ultra)
+      run: |
+        cd build
+        for so_file in $(find . -name "*.so"); do
+          echo "Compressing $so_file with UPX ultra..."
+          upx --ultra-brute --best "$so_file"
+          echo "Compression completed for $so_file"
+        done
+
+    - name: Show compression results
+      run: |
+        cd build
+        echo "=== Library sizes after compression ==="
+        find . -name "*.so" -exec ls -la {} \;
+        echo ""
+        echo "=== UPX compression statistics ==="
+        find . -name "*.so" -exec upx -l {} \;
+
+    - name: Collect compressed libraries
+      run: |
+        mkdir -p artifacts/${{ matrix.abi }}
+        find build -name "*.so" -exec cp {} artifacts/${{ matrix.abi }} \;
+
+    - name: Upload compressed artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-libs-${{ matrix.abi }}-compressed
+        path: artifacts/${{ matrix.abi }}/*.so
+        if-no-files-found: error
+
+  create-compressed-bundle:
+    name: Create compressed AAR bundle
+    runs-on: ubuntu-latest
+    needs: build-android-libs
+    steps:
+    - name: Download all compressed artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: android-libs-*-compressed
+        path: compressed-artifacts
+
+    - name: Set up JDK
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '11'
+
+    - name: Create compressed AAR structure
+      run: |
+        mkdir -p compressed-aar/jni
+        # Copy compressed libraries to appropriate ABI directories
+        for abi_dir in compressed-artifacts/*; do
+          abi=$(basename $abi_dir | sed 's/android-libs-\(.*\)-compressed/\1/')
+          if [ -d "$abi_dir" ]; then
+            mkdir -p compressed-aar/jni/$abi
+            cp $abi_dir/*.so compressed-aar/jni/$abi/
+          fi
+        done
+
+    - name: Create AndroidManifest.xml
+      run: |
+        cat > compressed-aar/AndroidManifest.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            package="com.example.nativelib">
+            <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="33" />
+        </manifest>
+        EOF
+
+    - name: Create compressed AAR file
+      run: |
+        cd compressed-aar
+        jar -cvf ../compressed-native-libs.aar .
+
+    - name: Compress AAR with UPX (optional)
+      run: |
+        # Note: UPX is primarily for binaries, but can try on AAR
+        echo "Original AAR size:"
+        ls -la compressed-native-libs.aar
+        upx --best compressed-native-libs.aar || echo "UPX on AAR may not be effective, continuing..."
+        echo "Compressed AAR size:"
+        ls -la compressed-native-libs.aar
+
+    - name: Upload compressed AAR bundle
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-compressed-native-libs-aar
+        path: compressed-native-libs.aar
+        if-no-files-found: error
+
+  size-report:
+    name: Size Comparison Report
+    runs-on: ubuntu-latest
+    needs: build-android-libs
+    steps:
+    - name: Download artifacts for comparison
+      uses: actions/download-artifact@v4
+      with:
+        pattern: android-libs-*
+        path: size-comparison
+
+    - name: Generate size report
+      run: |
+        echo "=== SIZE COMPARISON REPORT ==="
+        echo ""
+        echo "Library sizes per ABI:"
+        echo "-----------------------"
+        
+        for abi_dir in size-comparison/*; do
+          if [ -d "$abi_dir" ]; then
+            abi_name=$(basename $abi_dir)
+            echo "ABI: $abi_name"
+            for so_file in $abi_dir/*.so; do
+              if [ -f "$so_file" ]; then
+                size=$(ls -la "$so_file" | awk '{print $5}')
+                compressed_size=$(upx -q -t "$so_file" 2>/dev/null | grep "Percentage" || echo "No UPX info")
+                echo "  $(basename $so_file): $size bytes | $compressed_size"
+              fi
+            done
+            echo ""
+          fi
+        done
+
+        echo "=== TOTAL SAVINGS ==="
+        # Calculate approximate savings
+        total_size=$(find size-comparison -name "*.so" -exec ls -la {} \; | awk '{sum += $5} END {print sum}')
+        echo "Total size of all libraries: $total_size bytes ($(echo "scale=2; $total_size/1024/1024" | bc) MB)"
+        
+    - name: Upload size report
+      run: |
+        mkdir -p reports
+        echo "Size comparison report generated at $(date)" > reports/size-report.txt
+        # Add the report content from previous step
+        find size-comparison -name "*.so" -exec ls -la {} \; >> reports/size-report.txt
+        echo "" >> reports/size-report.txt
+        echo "UPX compression info:" >> reports/size-report.txt
+        find size-comparison -name "*.so" -exec upx -l {} \; >> reports/size-report.txt 2>/dev/null || true
+
+      uses: actions/upload-artifact@v4
+      with:
+        name: size-comparison-report
+        path: reports/size-report.txt
