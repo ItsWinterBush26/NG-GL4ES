@@ -191,6 +191,7 @@ if(ANDROID)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_SOURCE_DIR}/library/android/${ANDROID_ABI}/libspirv-cross-c-shared.so
             $<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>
+            )
 endif()
 
 target_include_directories(ng_gl4es PUBLIC
