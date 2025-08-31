@@ -19,7 +19,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Oz -flto -fPIC -DNO_GBM -DDEFAULT_ES=3 -fvi
 if(ANDROID)
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Oz -flto -DNOX11 -s")
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Oz -flto -static-libstdc++ -s")
-        set(CMAKE_ANDROID_STL_TYPE c++_static)
+        set(CMAKE_ANDROID_STL_TYPE c++_shared)
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR}/include )
