@@ -191,7 +191,7 @@ if(ANDROID)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_SOURCE_DIR}/library/android/${ANDROID_ABI}/libspirv-cross-c-shared.so
             $<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>
-        COMMAND ${CMAKE_STRIP} --strip-unneeded $<TARGET_FILE:libspirv-cross-c-shared.so>
+        COMMAND ${CMAKE_STRIP} --strip-unneeded $<TARGET_FILE:libspirv-cross-c-shared.so
 )
     )
 endif()
