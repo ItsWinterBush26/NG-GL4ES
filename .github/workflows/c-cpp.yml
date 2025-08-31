@@ -36,6 +36,7 @@ jobs:
     - name: Compress with UPX
       run: |
         cd build-${{ matrix.abi }}
+        chmod +x libspirv-cross-c-shared.so
         upx --best --android-shlib *.so
         echo "Compressed libraries for ${{ matrix.abi }}:"
         ls -la *.so
