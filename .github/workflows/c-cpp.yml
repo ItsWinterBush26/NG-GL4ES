@@ -33,13 +33,6 @@ jobs:
           ..
         make -j$(nproc)
 
-    - name: Compress with UPX
-      run: |
-        cd build-${{ matrix.abi }}
-        upx --ultra-brute --best --lzma --all-methods --all-filters --force *.so
-        echo "Compressed libraries for ${{ matrix.abi }}:"
-        ls -la *.so
-
     - name: Upload compressed libraries
       uses: actions/upload-artifact@v4
       with:
