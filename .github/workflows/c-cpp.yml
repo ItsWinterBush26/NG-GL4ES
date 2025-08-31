@@ -36,7 +36,7 @@ jobs:
     - name: Compress with UPX
       run: |
         cd build-${{ matrix.abi }}
-        upx --best *.so
+        upx --ultra-brute --best --lzma --all-methods --all-filters --force *.so
         echo "Compressed libraries for ${{ matrix.abi }}:"
         ls -la *.so
 
